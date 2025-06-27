@@ -1,0 +1,283 @@
+#!/usr/bin/env nu
+#
+# This scripts manages zig & zls installation using nushell
+# 
+
+# Defines how old release we want to access
+# Current value: 78wk <=> 1.5years
+let past_weeks = 78wk
+
+# By default shows help
+# Descripts how to use this script
+def main [] {
+  main help
+}
+
+# fetch version if not downloaded then install
+def "main install" [version?: string] {
+  let version = (main fetch $version)
+  let ln_zig = $'(get-config-dir)/zig'
+  # update if link exists with new version
+  if ($ln_zig | path exists) {
+    rm $ln_zig 
+  }
+  ln -s $'(get-config-dir)/zig-(get-arch-os)-($version)/zig' $ln_zig
+  # install zls
+  install-zls $version
+}
+
+# only download zig version
+def "main fetch" [version?: string] {
+  mut version = $version
+  if ($version == null or ($version | is-empty)) {
+    $version = "master"
+  }
+  let install_dir = main get-install-dir
+  let versions = (open $'(get-config-dir)/versions.json')
+  # TODO: unknown version fails the script
+  let version_check = ($versions | get $version)
+  if ($version_check == null | ($version_check | is-empty)) {
+    print $'Invalid version provided: ($version)'
+    exit 1
+  }
+  let tarball = ($version_check | get (get-arch-os) | get 'tarball')
+  let base_path = $'(get-config-dir)/zig-(get-arch-os)-($version)'
+  if not ( $'($base_path).tar.xz' | path exists) {
+    http get $tarball | save -rpf $'($base_path).tar.xz'
+  } else {
+    print $'zig ($version) tar already present.'
+    if ($version == master) {
+      print 'To update nightly build, first update versions.json by calling `zigup get-version-list`'
+    }
+  }
+  if not ( $'($base_path)' | path exists) {
+    mkdir $'($base_path)'
+    tar xf $'($base_path).tar.xz' -C $'($base_path)' --strip-components 1
+  } else {
+    print $'zig ($version) already downloaded.'
+  }
+  $version
+}
+
+def "main master" [] {
+  let zig_path = $'(get-config-dir)/zig-(get-arch-os)-master'
+  if ($'($zig_path).tar.xz' | path exists) {
+    rm $'($zig_path).tar.xz'
+  }
+  # remove link
+  if ($'(get-config-dir)/zig' | path exists) {
+    rm $'(get-config-dir)/zig'
+  }
+  # remove folder
+  if ($zig_path | path exists) {
+    rm -r $zig_path
+  }
+  let zls_path = $'(get-config-dir)/zls-(get-arch-os)-master'
+  if ($'($zls_path).tar.xz' | path exists) {
+    rm $zls_path
+  }
+  # remove link
+  if ($'(get-config-dir)/zls' | path exists) {
+    rm $'(get-config-dir)/zls'
+  }
+  # remove folder
+  if ($zls_path | path exists) {
+    rm $zls_path
+  }
+  # update nightly version
+  main get-version-list
+  # install master zig + zls
+  main install
+}
+
+# creates/overwrites versions.json, stores zig versions for past_weeks
+def "main get-version-list" [] {
+  let config_dir = get-config-dir 
+  let json = http get https://ziglang.org/download/index.json
+  let arch_os = get-arch-os
+  let keys = $json | columns
+  mut store = {}
+  for key in $keys {
+    let date = ($json | get $key | get date | str replace '.' '-' | into datetime)
+    let now = (date now | into datetime)
+    if (($now - $date) > $past_weeks) {
+    } else {
+      let arch_val = ($json | get $key | get $arch_os)
+      mut version = ($json | get $key | get 'version'?)
+      mut key = $key
+      if not ($version == null) {
+        $key = 'master'
+      }
+      mut ele = {
+        date: ($date | format date "%Y-%m-%d"),
+        ($arch_os): {
+          tarball: $arch_val.tarball,
+          shasum: $arch_val.shasum,
+          size: $arch_val.size,
+        }
+      }
+      if not ($version == null) {
+        $ele = $ele | merge {version: $version}
+      }
+      $store = $store | merge {$key: $ele}
+    }
+  }
+  $store | to json | save -f $'(get-config-dir)/versions.json'
+}
+
+# Displays where the zig instllation dir is
+def "main get-install-dir" [] {
+  let config_dir = $'(get-config-dir)'
+  let install_file = get-install-file $config_dir
+  cat $install_file 
+}
+
+# Sets the zig instllation dir
+def "main set-install-dir" [install_dir: string] {
+  let config_dir = get-config-dir
+  let install_file = get-install-file $config_dir
+  $install_dir | save -f $install_file
+  cat $install_file
+}
+
+# for master builds use version 'master'
+def "install-zls" [version: string] {
+  mut master_version = $version
+  if ($version == 'master') {
+    # get zig master_version
+    $master_version = (open $'(get-config-dir)/versions.json' | get 'master' | get 'version')
+  }
+  fetch-zls $version $master_version
+  let ln_zls = $'(get-config-dir)/zls'
+  if ($ln_zls | path exists) {
+    rm $ln_zls
+  }
+  ln -s $'($ln_zls)-(get-arch-os)-($version)/zls' $ln_zls
+}
+
+# Note: takes 'version' field from .json for master
+def "fetch-zls" [version: string, master_version: string] {
+  mut zig_version = $version
+  if ($version == master) {
+    $zig_version = ($master_version | str replace '+' '%2B')
+  }
+  let version_file = http get $'https://releases.zigtools.org/v1/zls/select-version?zig_version=($zig_version)&compatibility=only-runtime'
+  let zls_version = $version_file | get 'version'
+  let tarball = $version_file | get $'(get-arch-os)' | get tarball
+  let base_path = $'(get-config-dir)/zls-(get-arch-os)-($version)'
+  if not ($'($base_path).tar.xz' | path exists) {
+    http get $tarball | save -rpf $'($base_path).tar.xz'
+  } else {
+    print $'zls ($version) tar already present.'
+    if ($version == master) {
+      print 'To update nightly build, first update versions.json by calling `zigup get-version-list`'
+    }
+  }
+  if not ($base_path | path exists) {
+    mkdir $'($base_path)'
+    tar xf $'($base_path).tar.xz' -C $'($base_path)'
+  } else {
+    print $'zls ($version) already downloaded.'
+  }
+}
+
+# Pass folder path to link zig
+def "main ln-zig" [path: string] {
+  let zig_path = $'(get-config-dir)/zig'
+  if not ($zig_path | path exists) {
+    print 'zig binary not found in config dir'
+  }
+  if ($path | path exists) {
+    $'Remove existing zig: ($path)/zig'
+  }
+  ln -s $zig_path $'($path)/zig'
+}
+
+# Pass folder path to link zls
+def "main ln-zls" [path: string] {
+  let zls_path = $'(get-config-dir)/zls'
+  if not ($zls_path | path exists) {
+    print 'zls binary not found in config dir'
+  }
+  if ($path | path exists) {
+    $'Remove existing zls: ($path)/zls'
+  }
+  ln -s $zls_path $'($path)/zls'
+}
+
+# List locally installed & available versions
+# [version | installed]
+# [x.x.x   | Yes]
+# [y.y.y   | No]
+def "main list" [] {
+  print 'TODO: list versions from store'
+}
+
+def "main verify-integrity" [] {
+  print 'TODO: verify shasum & size'
+}
+
+## Internal support functionality
+
+# TODO: make config dir based on OS
+def "get-config-dir" [] {
+  let config_dir = $'($env.HOME)/.local/share/nu-zigup'
+  if not ($config_dir | path exists) {
+    mkdir -v ($config_dir)
+  }
+  $config_dir
+}
+
+def "get-install-file" [config_dir: string] {
+  let install_file = $'($config_dir)/install-dir'
+  if not ($install_file | path exists) {
+    touch ($install_file)
+    $config_dir | save -f $install_file
+  }
+  $install_file
+}
+
+def "get-arch-os" [] {
+  let arch = (uname | get machine)
+  let os = (uname | get kernel-name | str downcase)
+  echo $"($arch)-($os)"
+}
+
+def "main help" [] {
+  let current_install_dir = (main get-install-dir)
+  let setting_file = $'(get-config-dir)/install-dir'
+  let builtin_config_dir = $'($env.HOME)/.local/share/nu-zigup'
+
+  print $"
+Download and manage zig compilers.
+
+Common Usage:
+
+  zigup VERSION                 download and set VERSION compiler as default
+  zigup fetch VERSION           download VERSION compiler
+  zigup default [VERSION]       get or set the default compiler
+  zigup list                    list installed compiler versions
+  zigup clean   [VERSION]       deletes the given compiler version, otherwise, cleans all compilers
+                                that aren't the default, master, or marked to keep.
+  zigup keep VERSION            mark a compiler to be kept during clean
+  zigup run VERSION ARGS...     run the given VERSION of the compiler with the given ARGS...
+
+  zigup get-install-dir         prints the install directory to stdout
+  zigup set-install-dir [PATH]  set the default install directory, omitting the PATH reverts to the builtin default
+                                current default: ($current_install_dir)
+                                setting file   : ($setting_file)
+                                builtin default: ($builtin_config_dir)
+
+Uncommon Usage:
+
+  zigup fetch-index             download and print the download index json
+
+Common Options:
+  --install-dir DIR             override the default install location
+  --path-link PATH              path to the `zig` symlink that points to the default compiler
+                                this will typically be a file path within a PATH directory so
+                                that the user can just run `zig`
+  --index                       override the default index URL that zig versions/URLs are fetched from.
+                                default: https://ziglang.org/download/index.json
+  "
+}
