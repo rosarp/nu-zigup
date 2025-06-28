@@ -134,9 +134,13 @@ def "main get-install-dir" [] {
 }
 
 # Sets the zig instllation dir
-def "main set-install-dir" [install_dir: string] {
+def "main set-install-dir" [install_dir?: string] {
+  mut install_dir = $install_dir
+  if ($install_dir == null or ($install_dir | is-empty)) {
+    $install_dir = $'(get-config-dir)'
+  }
   let config_dir = get-config-dir
-  let install_file = get-install-file $config_dir
+  let install_file = (get-install-file $config_dir)
   $install_dir | save -f $install_file
   cat $install_file
 }
@@ -193,7 +197,7 @@ Common Usage:
   zigup fetch [VERSION]         download VERSION compiler (defaults to master)
   zigup master                  update to the latest master build (removes existing master first)
   
-  zigup get-install-dir         prints the install directory to stdout
+  zigup get-install-dir         prints the install directory to stdout, currently only supports linux folder structure
   zigup set-install-dir [PATH]  set the default install directory, omitting the PATH reverts to the builtin default
                                 current default: ($current_install_dir)
                                 setting file   : ($setting_file)
