@@ -13,6 +13,7 @@ def main [] {
   main help
 }
 
+# This is the first step. To download and update versions.json with available zig versions
 # creates/overwrites versions.json, stores zig versions for past_weeks
 def "main get-version-list" [] {
   let config_dir = get-config-dir 
@@ -134,9 +135,13 @@ def "main get-install-dir" [] {
 }
 
 # Sets the zig instllation dir
-def "main set-install-dir" [install_dir: string] {
+def "main set-install-dir" [install_dir?: string] {
+  mut install_dir = $install_dir
+  if ($install_dir == null or ($install_dir | is-empty)) {
+    $install_dir = $'(get-config-dir)'
+  }
   let config_dir = get-config-dir
-  let install_file = get-install-file $config_dir
+  let install_file = (get-install-file $config_dir)
   $install_dir | save -f $install_file
   cat $install_file
 }
@@ -177,6 +182,7 @@ def "main verify-integrity" [] {
   print 'TODO: verify shasum & size'
 }
 
+# By default shows help. Descripts how to use this script.
 def "main help" [] {
   let current_install_dir = (main get-install-dir)
   let setting_file = $'(get-config-dir)/install-dir'
@@ -187,26 +193,26 @@ Download and manage zig compilers & zls LSP.
 
 Common Usage:
 
-  zigup                         shows this help message by default
-  zigup get-version-list        this is the first step. To download and update versions.json with available zig versions
-  zigup install [VERSION]       download and set VERSION compiler as default (defaults to master)
-  zigup fetch [VERSION]         download VERSION compiler (defaults to master)
-  zigup master                  update to the latest master build (removes existing master first)
+  zigup                         By default shows help. Descripts how to use this script.
+  zigup get-version-list        This is the first step. To download and update versions.json with available zig versions
+  zigup install [VERSION]       Download and set VERSION compiler as default. defaults to master
+  zigup fetch [VERSION]         Download VERSION compiler. defaults to master
+  zigup master                  Update to the latest master build. Removes existing master first
   
-  zigup get-install-dir         prints the install directory to stdout
-  zigup set-install-dir [PATH]  set the default install directory, omitting the PATH reverts to the builtin default
+  zigup get-install-dir         Prints the install directory to stdout, currently only supports linux folder structure
+  zigup set-install-dir [PATH]  Set the default install directory, omitting the PATH reverts to the builtin default
                                 current default: ($current_install_dir)
                                 setting file   : ($setting_file)
                                 builtin default: ($builtin_config_dir)
   
-  zigup ln-zig PATH             create a symlink to zig in the specified PATH
-  zigup ln-zls PATH             create a symlink to zls in the specified PATH
+  zigup ln-zig PATH             Create a symlink to zig in the specified PATH
+  zigup ln-zls PATH             Create a symlink to zls in the specified PATH
 
 Uncommon Usage:
 
-  zigup verify-integrity        verify shasum & size of downloaded files (TODO: not fully implemented)
-  zigup list                    list installed compiler versions (TODO: not fully implemented)
-  "
+  zigup verify-integrity        Verify shasum & size of downloaded files. TODO: not fully implemented
+  zigup list                    List installed compiler versions. TODO: not fully implemented
+"
 }
 
 ## Internal support functionality
