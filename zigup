@@ -7,6 +7,8 @@
 # Current value: 78wk <=> 1.5years
 let past_weeks = 78wk
 
+let zigup_version = "0.1.0"
+
 # By default shows help
 # Descripts how to use this script
 def main [] {
@@ -80,8 +82,9 @@ def "main fetch" [version?: string] {
   let base_path = $'(get-config-dir)/zig-(get-arch-os)-($version)'
   if not ( $'($base_path).tar.xz' | path exists) {
     http get $tarball | save -rpf $'($base_path).tar.xz'
+    print $'zig ($version) tar downloaded.'
   } else {
-    print $'zig ($version) tar already present.'
+    print $'zig ($version) tar already downloaded.'
     if ($version == nightly) {
       print 'To update nightly build, first update versions.json by calling `zigup get-version-list`'
     }
@@ -89,8 +92,9 @@ def "main fetch" [version?: string] {
   if not ( $'($base_path)' | path exists) {
     mkdir $'($base_path)'
     tar xf $'($base_path).tar.xz' -C $'($base_path)' --strip-components 1
+    print $'zig ($version) installed.'
   } else {
-    print $'zig ($version) already downloaded.'
+    print $'zig ($version) already installed.'
   }
   $version
 }
@@ -189,6 +193,8 @@ def "main help" [] {
   let builtin_config_dir = $'($env.HOME)/.local/share/nu-zigup'
 
   print $"
+zigup version ($zigup_version)
+
 Download and manage zig compilers & zls LSP.
 
 Common Usage:
@@ -244,8 +250,9 @@ def "fetch-zls" [version: string, nightly_version: string] {
   let base_path = $'(get-config-dir)/zls-(get-arch-os)-($version)'
   if not ($'($base_path).tar.xz' | path exists) {
     http get $tarball | save -rpf $'($base_path).tar.xz'
+    print $'zls ($version) tar downloaded.'
   } else {
-    print $'zls ($version) tar already present.'
+    print $'zls ($version) tar already downloaded.'
     if ($version == nightly) {
       print 'To update nightly build, first update versions.json by calling `zigup get-version-list`'
     }
@@ -253,8 +260,9 @@ def "fetch-zls" [version: string, nightly_version: string] {
   if not ($base_path | path exists) {
     mkdir $'($base_path)'
     tar xf $'($base_path).tar.xz' -C $'($base_path)'
+    print $'zls ($version) installed.'
   } else {
-    print $'zls ($version) already downloaded.'
+    print $'zls ($version) already installed.'
   }
 }
 
