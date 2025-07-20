@@ -175,15 +175,28 @@ def "main ln-zls" [path: string] {
 }
 
 # List locally installed & available versions
-# [version | installed]
-# [x.x.x   | Yes]
-# [y.y.y   | No]
+# [# | version | zig | zls]
+# [0 | x.x.x   | Yes | Yes]
+# [1 | y.y.y   | No  | No ]
 def "main list" [] {
-  print 'TODO: list versions from store'
+  let zig_downloaded = (ls -s $'(get-config-dir)' | get name | parse $'zig-(get-arch-os)-{version}.tar.xz' | get version)
+  let zls_downloaded = (ls -s $'(get-config-dir)' | get name | parse $'zls-(get-arch-os)-{version}.tar.xz' | get version)
+  let available = (open $'(get-config-dir)/versions.json' | columns | each { |e|
+    let  zig_av = if ($zig_downloaded | any {|zd| $zd == $e}) { 'Yes' } else { 'No' }
+    let  zls_av = if ($zls_downloaded | any {|zd| $zd == $e}) { 'Yes' } else { 'No' }
+    return {version: $e, zig: $zig_av, zls: $zls_av}
+  })
+  print 'List down all available versions.'
+  print 'If a perticular version is downloaded then it is marked as 'Yes' otherwise 'No''
+  print $available
 }
 
-def "main verify-integrity" [] {
-  print 'TODO: verify shasum & size'
+def "main verify-integrity" [version: string] {
+  let expected_shasum = (open $'(get-config-dir)/versions.json') | get $version | get $'(get-arch-os)' | get shasum
+  let actual_shasum = (sha256sum $'(get-config-dir)/zig-(get-arch-os)-($version).tar.xz' | parse "{hash} {filename}" | get hash | get 0)
+  print $'actual:   ($actual_shasum)'
+  let result = if $expected_shasum == $actual_shasum { 'Integrity Passed!' } else { 'Integrity Failed!' }
+  print $result
 }
 
 # By default shows help. Descripts how to use this script.
