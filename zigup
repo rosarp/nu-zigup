@@ -49,6 +49,16 @@ def "main get-version-list" [] {
     }
   }
   $store | to json | save -f $'(get-config-dir)/versions.json'
+  let available = (open $'(get-config-dir)/versions.json' | items { |k, v|
+    mut version = $v | get version?
+    if ($version == null) {
+      $version = $k
+    } else {
+      $version = $'nightly: ($v.version)'
+    }
+    return {'zig version': $version}
+  })
+  print $available
 }
 
 # fetch version if not downloaded then install
@@ -181,12 +191,17 @@ def "main ln-zls" [path: string] {
 def "main list" [] {
   let zig_downloaded = (ls -s $'(get-config-dir)' | get name | parse $'zig-(get-arch-os)-{version}.tar.xz' | get version)
   let zls_downloaded = (ls -s $'(get-config-dir)' | get name | parse $'zls-(get-arch-os)-{version}.tar.xz' | get version)
-  let available = (open $'(get-config-dir)/versions.json' | columns | each { |e|
-    let  zig_av = if ($zig_downloaded | any {|zd| $zd == $e}) { 'Yes' } else { 'No' }
-    let  zls_av = if ($zls_downloaded | any {|zd| $zd == $e}) { 'Yes' } else { 'No' }
-    return {version: $e, zig: $zig_av, zls: $zls_av}
+  let available = (open $'(get-config-dir)/versions.json' | items { |k, v|
+    mut version = $v | get version?
+    if ($version == null) {
+      $version = $k
+    } else {
+      $version = $'nightly: ($v.version)'
+    }
+    let  zig_av = if ($zig_downloaded | any {|zd| $zd == $k}) { 'Yes' } else { 'No' }
+    let  zls_av = if ($zls_downloaded | any {|zd| $zd == $k}) { 'Yes' } else { 'No' }
+    return {'zig version': $version, zig: $zig_av, zls: $zls_av}
   })
-  print 'List down all available versions.'
   print 'If a perticular version is downloaded then it is marked as 'Yes' otherwise 'No''
   print $available
 }
