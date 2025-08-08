@@ -1,20 +1,20 @@
 #!/usr/bin/env nu
 
-def main [fn: string] {
-}
+def main [] {}
 
 def "main commit" [branch: string, msg: string] {
   jj commit -b $msg
-  jj bookmark create - $branch -r @-
+  jj bookmark create $branch -r @-
   jj git push --allow-new
 }
 
 def "main list" [] {
   jj git fetch
   jj bookmark list
+  jj rebase -d main@origin
 }
 
 def "main cleanup" [branch: string] {
-  jj git bookmark --delete $branch
+  jj bookmark --delete $branch
   jj git push --deleted
 }
