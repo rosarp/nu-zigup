@@ -5,7 +5,7 @@ def main [fn: string] {
 
 def "main commit" [branch: string, msg: string] {
   jj commit -b $msg
-  jj bookmark create - $branch -r @
+  jj bookmark create - $branch -r @-
   jj git push --allow-new
 }
 
