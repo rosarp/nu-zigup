@@ -3,7 +3,7 @@
 def main [] {}
 
 def "main commit" [branch: string, msg: string] {
-  jj commit -b $msg
+  jj commit -m $msg
   jj bookmark create $branch -r @-
   jj git push --allow-new
 }

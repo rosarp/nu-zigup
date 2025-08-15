@@ -110,6 +110,8 @@ def "main fetch" [version?: string] {
 }
 
 def "main nightly" [] {
+  # update nightly version
+  main get-version-list
   let zig_path = $'(get-config-dir)/zig-(get-arch-os)-nightly'
   if ($'($zig_path).tar.xz' | path exists) {
     rm $'($zig_path).tar.xz'
@@ -134,10 +136,9 @@ def "main nightly" [] {
   if ($zls_path | path exists) {
     rm -r $zls_path
   }
-  # update nightly version
-  main get-version-list
   # install nightly zig + zls
   main install
+  main list
 }
 
 
@@ -212,6 +213,26 @@ def "main verify-integrity" [version: string] {
   print $'actual:   ($actual_shasum)'
   let result = if $expected_shasum == $actual_shasum { 'Integrity Passed!' } else { 'Integrity Failed!' }
   print $result
+}
+
+def "main uninstall" [version: string] {
+  let installed_version = (zig version)
+  if ($version == $installed_version) {
+    print 'Can not uninstall current version.'
+    return
+  }
+  let zig_path = $'(get-config-dir)/zig-(get-arch-os)-($version)'
+  let zls_path = $'(get-config-dir)/zls-(get-arch-os)-($version)'
+  if ($zig_path | path exists) {
+    print $zig_path
+    rm -r $zig_path
+    print $'($zig_path).tar.xz'
+    rm $'($zig_path).tar.xz'
+    print $zls_path
+    rm -r $zls_path
+    print $'($zls_path).tar.xz'
+    rm $'($zls_path).tar.xz'
+  }
 }
 
 # By default shows help. Descripts how to use this script.
