@@ -30,10 +30,6 @@ def "main get-version-list" [] {
     } else {
       let arch_val = ($json | get $key | get $arch_os)
       mut version = ($json | get $key | get 'version'?)
-      mut key = $key
-      if not ($version == null) {
-        $key = 'nightly'
-      }
       mut ele = {
         date: ($date | format date "%Y-%m-%d"),
         ($arch_os): {
@@ -42,7 +38,7 @@ def "main get-version-list" [] {
           size: $arch_val.size,
         }
       }
-      if not ($version == null) {
+      if $key == 'master' {
         $ele = $ele | merge {version: $version}
       }
       $store = $store | merge {$key: $ele}
@@ -54,7 +50,7 @@ def "main get-version-list" [] {
     if ($version == null) {
       $version = $k
     } else {
-      $version = $'nightly: ($v.version)'
+      $version = $'master: ($v.version)'
     }
     return {'zig version': $version}
   })
@@ -78,7 +74,7 @@ def "main install" [version?: string] {
 def "main fetch" [version?: string] {
   mut version = $version
   if ($version == null or ($version | is-empty)) {
-    $version = "nightly"
+    $version = "master"
   }
   let install_dir = main get-install-dir
   let versions = (open $'(get-config-dir)/versions.json')
@@ -95,8 +91,8 @@ def "main fetch" [version?: string] {
     print $'zig ($version) tar downloaded.'
   } else {
     print $'zig ($version) tar already downloaded.'
-    if ($version == nightly) {
-      print 'To update nightly build, first update versions.json by calling `zigup get-version-list`'
+    if ($version == master) {
+      print 'To update master build, first update versions.json by calling `zigup get-version-list`'
     }
   }
   if not ( $'($base_path)' | path exists) {
@@ -109,10 +105,10 @@ def "main fetch" [version?: string] {
   $version
 }
 
-def "main nightly" [] {
-  # update nightly version
+def "main master" [] {
+  # update master version
   main get-version-list
-  let zig_path = $'(get-config-dir)/zig-(get-arch-os)-nightly'
+  let zig_path = $'(get-config-dir)/zig-(get-arch-os)-master'
   if ($'($zig_path).tar.xz' | path exists) {
     rm $'($zig_path).tar.xz'
   }
@@ -124,7 +120,7 @@ def "main nightly" [] {
   if ($zig_path | path exists) {
     rm -r $zig_path
   }
-  let zls_path = $'(get-config-dir)/zls-(get-arch-os)-nightly'
+  let zls_path = $'(get-config-dir)/zls-(get-arch-os)-master'
   if ($'($zls_path).tar.xz' | path exists) {
     rm $'($zls_path).tar.xz'
   }
@@ -136,7 +132,7 @@ def "main nightly" [] {
   if ($zls_path | path exists) {
     rm -r $zls_path
   }
-  # install nightly zig + zls
+  # install master zig + zls
   main install
   main list
 }
@@ -197,7 +193,7 @@ def "main list" [] {
     if ($version == null) {
       $version = $k
     } else {
-      $version = $'nightly: ($v.version)'
+      $version = $'master: ($v.version)'
     }
     let  zig_av = if ($zig_downloaded | any {|zd| $zd == $k}) { 'Yes' } else { 'No' }
     let  zls_av = if ($zls_downloaded | any {|zd| $zd == $k}) { 'Yes' } else { 'No' }
@@ -250,9 +246,10 @@ Common Usage:
 
   zigup                         By default shows help. Descripts how to use this script.
   zigup get-version-list        This is the first step. To download and update versions.json with available zig versions
-  zigup install [VERSION]       Download and set VERSION compiler as default. defaults to nightly
-  zigup fetch [VERSION]         Download VERSION compiler. defaults to nightly
-  zigup nightly                 Update to the latest nightly build. Removes existing nightly first
+  zigup install [VERSION]       Download and set VERSION compiler as default. defaults to master
+  zigup uninstall [VERSION]     Removes zig & zls installed DIR & tar.xz files of VERSION. Current version can not be deleted.
+  zigup fetch [VERSION]         Download VERSION compiler. defaults to master
+  zigup master                 Update to the latest master build. Removes existing master first
   
   zigup get-install-dir         Prints the install directory to stdout, currently only supports linux folder structure
   zigup set-install-dir [PATH]  Set the default install directory, omitting the PATH reverts to the builtin default
@@ -272,14 +269,14 @@ Uncommon Usage:
 
 ## Internal support functionality
 
-# for nightly builds use version 'nightly'
+# for master builds use version 'master'
 def "install-zls" [version: string] {
-  mut nightly_version = $version
-  if ($version == 'nightly') {
-    # get zig nightly_version
-    $nightly_version = (open $'(get-config-dir)/versions.json' | get 'nightly' | get 'version')
+  mut master_version = $version
+  if ($version == 'master') {
+    # get zig master_version
+    $master_version = (open $'(get-config-dir)/versions.json' | get 'master' | get 'version')
   }
-  fetch-zls $version $nightly_version
+  fetch-zls $version $master_version
   let ln_zls = $'(get-config-dir)/zls'
   if ($ln_zls | path exists) {
     rm $ln_zls
@@ -287,11 +284,11 @@ def "install-zls" [version: string] {
   ln -s $'($ln_zls)-(get-arch-os)-($version)/zls' $ln_zls
 }
 
-# Note: takes 'version' field from .json for nightly
-def "fetch-zls" [version: string, nightly_version: string] {
+# Note: takes 'version' field from .json for master
+def "fetch-zls" [version: string, master_version: string] {
   mut zig_version = $version
-  if ($version == nightly) {
-    $zig_version = ($nightly_version | str replace '+' '%2B')
+  if ($version == master) {
+    $zig_version = ($master_version | str replace '+' '%2B')
   }
   let version_file = http get $'https://releases.zigtools.org/v1/zls/select-version?zig_version=($zig_version)&compatibility=only-runtime'
   let zls_version = $version_file | get 'version'
@@ -302,8 +299,8 @@ def "fetch-zls" [version: string, nightly_version: string] {
     print $'zls ($version) tar downloaded.'
   } else {
     print $'zls ($version) tar already downloaded.'
-    if ($version == nightly) {
-      print 'To update nightly build, first update versions.json by calling `zigup get-version-list`'
+    if ($version == master) {
+      print 'To update master build, first update versions.json by calling `zigup get-version-list`'
     }
   }
   if not ($base_path | path exists) {
